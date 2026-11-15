@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b285b">
+<title>My Study Consistency Tracker</title>
+<style>
+:root{--navy:#1b285b;--ink:#172033;--muted:#687386;--line:#e7eaf0;--bg:#f4f6fa;--white:#fff;--green:#16794b;--red:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+header{background:var(--navy);color:#fff;padding:25px 20px 27px;border-radius:0 0 26px 26px}
+header h1{font-size:22px;margin:0 0 7px} header p{margin:0;font-size:14px;opacity:.9}
+main{max-width:760px;margin:14px auto;padding:0 14px 32px}
+nav{display:flex;gap:8px;overflow:auto;margin:14px 0}
+.tab{border:0;border-radius:14px;background:#fff;padding:12px 15px;font-weight:700;font-size:14px;white-space:nowrap;color:var(--ink)}
+.tab.active{background:var(--navy);color:#fff}
+.panel,.subject,.stat{background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;margin-bottom:12px}
+.panel h2{font-size:18px;margin:0 0 8px}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+input[type=date]{padding:10px;border:1px solid #ccd2dc;border-radius:12px;font-size:15px;background:#fff}
+.small{font-size:13px;color:var(--muted);line-height:1.5}
+.subject h3{margin:0;font-size:17px}
+.subject ul{padding-left:18px;margin:12px 0;color:#303949;font-size:14px;line-height:1.9}
+.status{font-size:14px;font-weight:700}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.actions button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 5px;font-weight:700;font-size:12px;color:var(--ink)}
+.actions button:active{background:#edf1fb}
+.actions button.selected{border:2px solid var(--navy);background:#edf1fb}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat{margin:0;padding:13px}
+.stat span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+.stat strong{font-size:22px}
+.hidden{display:none!important}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+th,td{padding:10px 6px;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:700}
+.pill{display:inline-block;padding:4px 8px;border-radius:20px;background:#edf1fb;font-size:12px;font-weight:700}
+.barwrap{height:10px;background:#e9edf4;border-radius:10px;overflow:hidden;margin-top:7px}
+.bar{height:100%;background:var(--navy);width:0}
+.monthgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.monthcard{border:1px solid var(--line);border-radius:14px;padding:12px}
+.monthcard h3{font-size:15px;margin:0 0 8px}
+button:focus,input:focus{outline:2px solid #8296d4;outline-offset:2px}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:12px}
+@media(max-width:420px){.actions button{font-size:11px}.topline{align-items:flex-start}}
+</style>
+</head>
+<body>
+<header><h1>My Study Consistency Tracker</h1><p>Daily points · Weekly target · Monthly comparison</p></header>
+<main>
+<nav>
+<button class="tab active" data-tab="daily">Daily</button>
+<button class="tab" data-tab="weekly">Weekly report</button>
+<button class="tab" data-tab="monthly">Monthly report</button>
+</nav>
+<section id="daily">
+<div class="panel">
+<div class="topline"><div><h2>Today's progress</h2><div id="dayLabel" class="small"></div></div><input id="datePick" type="date" aria-label="Select date"></div>
+<p class="small">Select one result for each subject. Complete = +1 · Partial = −0.25 · Nothing = −1. A subject counts as a streak day only when all its tasks are done.</p>
+<div id="subjects"></div>
+<div class="stats">
+<div class="stat"><span>Today's total</span><strong id="total">0.00</strong></div>
+<div class="stat"><span>Completed subjects</span><strong id="completed">0/3</strong></div>
+</div>
+</div>
+</section>
+<section id="weekly" class="hidden">
+<div class="panel"><h2>Weekly report</h2><div class="topline"><p class="small">Monday–Sunday · Target: 6 full-completion days per subject</p><input id="weekPick" type="date" aria-label="Choose week"></div><div id="weeklyReport"></div></div>
+</section>
+<section id="monthly" class="hidden">
+<div class="panel"><h2>Monthly report</h2><div class="topline"><p class="small">Monthly subject-wise performance</p><input id="monthPick" type="month" aria-label="Choose month"></div><div id="monthlyReport"></div></div>
+<div class="panel"><h2>Month-to-month comparison</h2><p class="small">Average daily points for each subject, compared across months.</p><div id="comparison"></div></div>
+</section>
+<footer>Progress is saved on this device in this browser. Avoid clearing browser site data.</footer>
+</main>
+<script>
+const START_DATE = '2026-11-16';
+const subjects = [
+ {id:'Maths',tasks:['Lecture · 1 hr 30 min','Current revision · 1 hr','Previous revision · 1 hr']},
+ {id:'GS',tasks:['Lecture · 2 hrs',"Today's topic revision · 30 min",'Previous topic revision · 30 min']},
+ {id:'English',tasks:['Lecture · 1 hr','Practice · 20 min','Revision · 40 min']}
+];
+const STORE='studyConsistencyTracker_v2';
+let data={}; try{data=JSON.parse(localStorage.getItem(STORE)||'{}')}catch(e){data={}}
+const $=id=>document.getElementById(id);
+function localISO(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+function parseISO(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12)}
+function pretty(s){return parseISO(s).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+function save(){localStorage.setItem(STORE,JSON.stringify(data))}
+function score(v){return v==='complete'?1:v==='partial'?-0.25:v==='nothing'?-1:0}
+function statusText(v){return v==='complete'?'Complete +1':v==='partial'?'Partial −0.25':v==='nothing'?'Nothing −1':'Not marked'}
+function renderDaily(){
+ const date=$('datePick').value; $('dayLabel').textContent=pretty(date);
+ const wrap=$('subjects');wrap.innerHTML='';
+ let total=0,completed=0;
+ subjects.forEach(s=>{
+  const v=data[date]?.[s.id]||'';
+  total+=score(v);if(v==='complete')completed++;
+  const card=document.createElement('div');card.className='subject';
+  const h=document.createElement('div');h.className='topline';
+  const title=document.createElement('h3');title.textContent=s.id;
+  const st=document.createElement('span');st.className='status';st.textContent=statusText(v);
+  h.append(title,st);card.append(h);
+  const ul=document.createElement('ul');s.tasks.forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.append(li)});card.append(ul);
+  const actions=document.createElement('div');actions.className='actions';
+  [['complete','Complete +1'],['partial','Partial −0.25'],['nothing','Nothing −1']].forEach(([key,label])=>{
+   const b=document.createElement('button');b.textContent=label;if(v===key)b.classList.add('selected');
+   b.onclick=()=>{if(!data[date])data[date]={};data[date][s.id]=key;save();renderDaily()};actions.append(b);
+  });
+  card.append(actions);wrap.append(card);
+ });
+ $('total').textContent=total.toFixed(2);$('completed').textContent=`${completed}/3`;
+}
+function mondayOf(s){const d=parseISO(s);const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return localISO(d)}
+function addDays(s,n){const d=parseISO(s);d.setDate(d.getDate()+n);return localISO(d)}
+function datesBetween(a,b){const out=[];for(let x=a;x<=b;x=addDays(x,1))out.push(x);return out}
+function renderWeekly(){
+ const start=mondayOf($('weekPick').value),end=addDays(start,6),days=datesBetween(start,end);
+ let html='<table><thead><tr><th>Subject</th><th>Full days</th><th>Partial</th><th>Missed</th><th>Points</th><th>Target</th></tr></thead><tbody>';
+ subjects.forEach(s=>{let full=0,partial=0,missed=0,points=0;days.forEach(d=>{const v=data[d]?.[s.id]||'';if(v==='complete')full++;else if(v==='partial')partial++;else if(v==='nothing')missed++;points+=score(v)});html+=`<tr><td><b>${s.id}</b></td><td>${full}/7</td><td>${partial}</td><td>${missed}</td><td>${points.toFixed(2)}</td><td>${full>=6?'<span class="pill">Achieved</span>':'Not yet'}</td></tr>`});
+ html+='</tbody></table><p class="small">Week: '+pretty(start)+' – '+pretty(end)+'. Unmarked days are not counted as missed.</p>';$('weeklyReport').innerHTML=html;
+}
+function monthDates(ym){const [y,m]=ym.split('-').map(Number);const last=new Date(y,m,0).getDate();const a=[];for(let d=1;d<=last;d++)a.push(`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);return a}
+function monthStats(ym,s){let full=0,partial=0,missed=0,points=0,marked=0;monthDates(ym).forEach(d=>{const v=data[d]?.[s]||'';if(v){marked++;points+=score(v);if(v==='complete')full++;else if(v==='partial')partial++;else if(v==='nothing')missed++}});return {full,partial,missed,points,marked,avg:marked?points/marked:0}}
+function renderMonthly(){
+ const ym=$('monthPick').value;let html='<div class="monthgrid">';
+ subjects.forEach(s=>{const x=monthStats(ym,s);html+=`<div class="monthcard"><h3>${s.id}</h3><p class="small">Full: ${x.full} · Partial: ${x.partial} · Nothing: ${x.missed}</p><b>${x.points.toFixed(2)} points</b><p class="small">Average per marked day: ${x.avg.toFixed(2)}</p></div>`});html+='</div>';$('monthlyReport').innerHTML=html;
+ const months=[...new Set(Object.keys(data).map(d=>d.slice(0,7)))].sort();
+ if(!months.includes(ym))months.push(ym);months.sort();
+ let chart='<table><thead><tr><th>Month</th>'+subjects.map(s=>`<th>${s.id}</th>`).join('')+'</tr></thead><tbody>';
+ months.forEach(m=>{chart+=`<tr><td>${new Date(m+'-02').toLocaleDateString(undefined,{month:'short',year:'numeric'})}</td>`;subjects.forEach(s=>chart+=`<td>${monthStats(m,s).avg.toFixed(2)}</td>`);chart+='</tr>'});chart+='</tbody></table>';$('comparison').innerHTML=chart;
+}
+function setTab(name){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));['daily','weekly','monthly'].forEach(id=>$(id).classList.toggle('hidden',id!==name));if(name==='weekly')renderWeekly();if(name==='monthly')renderMonthly()}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+$('datePick').value=localISO();$('datePick').addEventListener('change',renderDaily);
+$('weekPick').value=localISO();$('weekPick').addEventListener('change',renderWeekly);
+$('monthPick').value=localISO().slice(0,7);$('monthPick').addEventListener('change',renderMonthly);
+renderDaily();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.getRegistration().then(r=>{if(r)r.update()}).catch(()=>{}))}
+</script>
+</body>
+</html>
